@@ -44,7 +44,7 @@ class Data:
         """
         (test_set_raw, valid_set_raw, train_set_raw), info = tfds.load(
             self.config.data_name, split=self.splits,
-            as_supervised=self.config.as_supervised, with_info=self.config.with_info)
+            as_supervised=True, with_info=True)
 
         self.is_load=True
         self.test_set_raw=test_set_raw

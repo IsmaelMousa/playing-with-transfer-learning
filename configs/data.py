@@ -17,8 +17,6 @@ class DataConfig:
     img_size:tuple[int,int]
     validation_ratio:float
     test_ratio:float
-    as_supervised:bool
-    with_info:bool
     data_name:str
     preprocess:str
 
