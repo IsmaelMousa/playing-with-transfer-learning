@@ -8,11 +8,20 @@ from configs.data import DataConfig
 np.random.seed(42)
 
 class Data:
-    def __init__(self, data_config: DataConfig):
-        self.data_config = data_config
-        validation_ratio=f"{data_config.validation_ratio * 100:.0f}%"
-        test_ratio=f"{(data_config.test_ratio+data_config.validation_ratio) * 100:.0f}%"
+    def __init__(self, config: DataConfig):
+        self.config = config
+        validation_ratio=f"{config.validation_ratio * 100:.0f}%"
+        test_ratio=f"{(config.test_ratio+config.validation_ratio) * 100:.0f}%"
         self.splits=[f"train[:{validation_ratio}]", f"train[{validation_ratio}:{test_ratio}]", f"train[{test_ratio}:]"]
+        if config.preprocess == "resnet50":
+            self.preprocess=resnet.preprocess_input
+        else:
+            self.preprocess=mobilenet.preprocess_input
+        self.is_load=False
+        self.test_set_raw=None
+        self.validation_set_raw=None
+        self.train_set_raw=None
+        self.info=None
 
     def __to_numpy(self,dataset):
         """
@@ -23,35 +32,44 @@ class Data:
         images, labels = [], []
         for img, label in dataset:
             img = img.numpy()
-            img = np.array(Image.fromarray(img).resize(self.data_config.img_size))
+            img = np.array(Image.fromarray(img).resize(self.config.img_size))
             images.append(img)
             labels.append(label.numpy())
         return np.array(images), np.array(labels)
 
-
-    def load_and_prepare(self):
+    def load(self):
         """
-        Loads the data from a specific name and prepares the data for the pre-train model
-        :return: the prepared data and labels
+        Loads the data from a specific name
+        :return: the loaded data and info
         """
         (test_set_raw, valid_set_raw, train_set_raw), info = tfds.load(
-            self.data_config.data_name, split=self.splits,
-            as_supervised=self.data_config.as_supervised, with_info=self.data_config.with_info)
+            self.config.data_name, split=self.splits,
+            as_supervised=self.config.as_supervised, with_info=self.config.with_info)
 
-        train_images, train_labels = self.__to_numpy(train_set_raw)
-        valid_images, valid_labels = self.__to_numpy(valid_set_raw)
-        test_images, test_labels = self.__to_numpy(test_set_raw)
+        self.is_load=True
+        self.test_set_raw=test_set_raw
+        self.validation_set_raw=valid_set_raw
+        self.train_set_raw=train_set_raw
+        self.info=info
+        return test_set_raw, valid_set_raw, train_set_raw, info
 
-        if self.data_config.model_type.value == "resnet50":
-            train_images = resnet.preprocess_input(train_images)
-            valid_images = resnet.preprocess_input(valid_images)
-            test_images = resnet.preprocess_input(test_images)
 
-        else:
-            train_images = mobilenet.preprocess_input(train_images)
-            valid_images = mobilenet.preprocess_input(valid_images)
-            test_images = mobilenet.preprocess_input(test_images)
+    def prepare(self):
+        """
+        prepares the data for the pre-train model
+        :return: the prepared data and labels
+        """
+        if not self.is_load:
+            raise Exception("You need to load the data first => data.load()")
 
-        class_names = info.features["label"].names
+        train_images, train_labels = self.__to_numpy(self.train_set_raw)
+        valid_images, valid_labels = self.__to_numpy(self.validation_set_raw)
+        test_images, test_labels = self.__to_numpy(self.test_set_raw)
+
+        train_images = self.preprocess(train_images)
+        valid_images = self.preprocess(valid_images)
+        test_images = self.preprocess(test_images)
+
+        class_names = self.info.features["label"].names
 
         return (train_images, train_labels), (valid_images, valid_labels), (test_images, test_labels), class_names
