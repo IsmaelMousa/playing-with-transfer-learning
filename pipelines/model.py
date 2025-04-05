@@ -17,41 +17,38 @@ class Model:
     """
     def __init__(self, config: ModelConfig):
         self.config    = config
-
-        assert config.hidden_layers               == len(config.hidden_neurons)
-        assert config.hidden_layers               == len(config.hidden_activations)
-        assert config.convolutional_layers        == len(config.convolutional_filters)
-        assert config.convolutional_layers        == len(config.convolutional_kernels)
-        assert config.convolutional_layers        == len(config.convolutional_activations)
-        assert config.pooling_layers              == len(config.pooling_kernels)
-        assert config.dropout_layers              == len(config.dropout_rates)
-
         self.dropout   = config.dropout_layers      == config.convolutional_layers
         self.norm      = config.batch_normalization == config.convolutional_layers
-
         self.optimizer = {"sgd"     : SGD,      "adam"   : Adam,
                           "rmsprop" : RMSprop,  "adagrad": Adagrad,
                           "adadelta": Adadelta, "adamax" : Adamax,
                           "nadam"   : Nadam,    "ftrl"   : Ftrl}[config.optimizer]
+
+        assert config.hidden_layers                 == len(config.hidden_neurons)
+        assert config.hidden_layers                 == len(config.hidden_activations)
+        assert config.convolutional_layers          == len(config.convolutional_filters)
+        assert config.convolutional_layers          == len(config.convolutional_kernels)
+        assert config.convolutional_layers          == len(config.convolutional_activations)
+        assert config.pooling_layers                == len(config.pooling_kernels)
+        assert config.dropout_layers                == len(config.dropout_rates)
 
 
     def build(self):
         """
         TODO
         """
-        if self.config.type == "resnet50":
-            base = res.ResNet50   (input_shape=self.config.input_shape,
-                                   weights    =self.config.weights,
-                                   include_top=False)
-        else:
-            base = mob.MobileNetV2(input_shape=self.config.input_shape,
-                                   weights    =self.config.weights,
-                                   include_top=False)
+        if self.config.type == "resnet50": base = res.ResNet50   (input_shape=self.config.input_shape,
+                                                                  weights    =self.config.weights,
+                                                                  include_top=False)
+
+        else                             : base = mob.MobileNetV2(input_shape=self.config.input_shape,
+                                                                  weights    =self.config.weights,
+                                                                  include_top=False)
 
         base.trainable = False
 
-        inputs  = Input(shape=self.config.input_shape, batch_size=self.config.batch_size)
-        outputs = base(inputs, training=False)
+        inputs         = Input(shape=self.config.input_shape, batch_size=self.config.batch_size)
+        outputs        = base(inputs, training=False)
 
         for index in range(self.config.convolutional_layers):
             outputs = Conv2D(filters    =self.config.convolutional_filters[index],
@@ -59,34 +56,27 @@ class Model:
                              activation =self.config.convolutional_activations[index],
                              padding    =self.config.padding)(outputs)
 
-            if self.norm:
-                outputs = BatchNormalization()(outputs)
+            if self.norm   : outputs = BatchNormalization()(outputs)
+            if self.dropout: outputs = Dropout(rate=self.config.dropout_rates[index])(outputs)
 
             outputs = MaxPooling2D(pool_size=self.config.pooling_kernels[index])(outputs)
 
-            if self.dropout:
-                outputs = Dropout(rate=self.config.dropout_rates[index])(outputs)
 
-        dropout = self.config.dropout_layers      == self.config.hidden_layers
-        norm    = self.config.batch_normalization == self.config.hidden_layers
+        dropout        = self.config.dropout_layers      == self.config.hidden_layers
+        norm           = self.config.batch_normalization == self.config.hidden_layers
 
-        if self.config.global_average_pooling:
-            outputs = GlobalAveragePooling2D()(outputs)
+        if self.config.global_average_pooling: outputs = GlobalAveragePooling2D()(outputs)
 
         for index in range(self.config.hidden_layers):
             outputs = Dense(units     =self.config.hidden_neurons[index],
                             activation=self.config.hidden_activations[index])(outputs)
 
-            if norm:
-                outputs = BatchNormalization()(outputs)
+            if norm   : outputs = BatchNormalization()(outputs)
+            if dropout: outputs = Dropout(rate=self.config.dropout_rates[index])(outputs)
 
-            if dropout:
-                outputs = Dropout(rate=self.config.dropout_rates[index])(outputs)
+        outputs        = Dense(units=len(self.config.classes), activation=self.config.output_activation)(outputs)
 
-        outputs    = Dense(units     =len(self.config.classes),
-                           activation=self.config.output_activation)(outputs)
-
-        self.model = KModel(inputs=inputs, outputs=outputs)
+        self.model     = KModel(inputs=inputs, outputs=outputs)
 
         if self.config.info:
             print(f"Total layers in model: {len(self.model.layers)}")
@@ -132,8 +122,8 @@ class Model:
         TODO
         """
         x, y      = splits
-        metrics   = self.model.evaluate(x=x, y=y)
 
+        metrics   = self.model.evaluate(x=x, y=y)
         loss      = metrics[0]
         accuracy  = metrics[1]
         recall    = metrics[2]
@@ -153,14 +143,15 @@ class Model:
             predicted_labels = np.argmax(a=predictions, axis=1)
             actual_labels    = np.argmax(a=y, axis=1)
             indices          = np.random.choice(a=x.shape[0], size=9)
+            classes          = self.config.classes
 
             plt.figure(figsize=(10, 10))
             for i, idx in enumerate(indices):
                 plt.subplot(3, 3, i + 1)
-                image = (x[idx] + 1) / 2.0
+                image     = (x[idx] + 1) / 2.0
                 plt.imshow(image)
-                actual    = self.config.classes[actual_labels[idx]]
-                predicted = self.config.classes[predicted_labels[idx]]
+                actual    = classes[actual_labels[idx]]
+                predicted = classes[predicted_labels[idx]]
                 color     = "green" if actual == predicted else "red"
                 plt.title(f"Actual: {actual}\nPredicted: {predicted}", color=color)
                 plt.axis("off")
@@ -169,11 +160,13 @@ class Model:
 
         return metrics
 
+
     def predict(self, inputs):
         """
         TODO
         """
         return self.model.predict(inputs)
+
 
     @staticmethod
     def visualize_performance(history, metric):
@@ -213,15 +206,16 @@ class Model:
         predicted_labels = np.argmax(a=predictions, axis=1)
         actual_labels    = np.argmax(a=y, axis=1)
         indices          = np.where(predicted_labels != actual_labels)[0]
+        classes          = self.config.classes
         misclassified    = np.random.choice(a=indices, size=9, replace=False)
 
         plt.figure(figsize=(10, 10))
         for i, idx in enumerate(misclassified):
             plt.subplot(3, 3, i + 1)
-            image = (x[idx] + 1) / 2.0
+            image     = (x[idx] + 1) / 2.0
             plt.imshow(image)
-            actual    = self.config.classes[actual_labels[idx]]
-            predicted = self.config.classes[predicted_labels[idx]]
+            actual    = classes[actual_labels[idx]]
+            predicted = classes[predicted_labels[idx]]
             plt.title(f"Actual: {actual}\nPredicted: {predicted}", color="red")
             plt.axis("off")
         plt.tight_layout()
@@ -237,20 +231,14 @@ class Model:
         predictions = self.model.predict(x=x)
         predicted   = np.argmax(a=predictions, axis=1)
         actual      = np.argmax(a=y, axis=1)
-
         cm          = confusion_matrix(actual, predicted)
+        classes     = self.config.classes
 
-        plt.figure(figsize     =(8, 6))
-        sns.heatmap(data       =cm,
-                    annot      =True,
-                    fmt        ="d",
-                    cmap       ="Greens",
-                    cbar       =False,
-                    xticklabels=self.config.classes,
-                    yticklabels=self.config.classes)
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(data=cm, annot=True, fmt="d", cmap="Reds", cbar=False, xticklabels=classes, yticklabels=classes)
         plt.xlabel("Predicted Label")
         plt.ylabel("True Label")
-        plt.title("Confusion Matrix")
+        plt.title ("Confusion Matrix")
         plt.tight_layout()
         plt.show()
 
