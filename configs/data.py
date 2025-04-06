@@ -6,15 +6,15 @@ class DataConfig:
       Represents the interface of the data configuration.
 
       Attributes:
-        - img_size (tuple[int, int]): The target size (height, width) for image resizing.
-        - validation_ratio (float): The fraction of data to be used for validation.
-        - test_ratio (float): The fraction of data to be used for testing.
-        - as_supervised (bool): Whether to load the dataset in (image, label) format.
-        - with_info (bool): Whether to include additional metadata when loading the dataset.
-        - data_name (str): The name of the dataset to be loaded.
-        - preprocess (Literal["resnet50", "mobilenet"]): The name of the preprocessing model to apply.
+        - img_size: The target size (height, width) for image resizing.
+        - validation_ratio: The fraction of data to be used for validation.
+        - test_ratio: The fraction of data to be used for testing.
+        - as_supervised: Whether to load the dataset in (image, label) format.
+        - with_info: Whether to include additional metadata when loading the dataset.
+        - data_name: The name of the dataset to be loaded.
+        - preprocess: The name of the preprocessing model to apply.
     """
-    img_size:tuple[int,int]
+    img_size:tuple
     validation_ratio:float
     test_ratio:float
     data_name:str

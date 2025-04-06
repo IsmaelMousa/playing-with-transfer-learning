@@ -4,6 +4,8 @@ from PIL import Image
 import tensorflow.keras.applications.resnet50 as resnet
 import tensorflow.keras.applications.mobilenet as mobilenet
 from configs.data import DataConfig
+from tensorflow.keras.utils import to_categorical
+
 
 np.random.seed(42)
 
@@ -35,7 +37,9 @@ class Data:
             img = np.array(Image.fromarray(img).resize(self.config.img_size))
             images.append(img)
             labels.append(label.numpy())
-        return np.array(images), np.array(labels)
+
+        labels = to_categorical(np.array(labels))
+        return np.array(images), labels
 
     def load(self):
         """
