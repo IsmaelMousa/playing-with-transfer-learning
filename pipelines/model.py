@@ -1,19 +1,24 @@
-from warnings import filterwarnings; filterwarnings("ignore")
+import warnings; warnings.filterwarnings("ignore")
 import os; os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+import re
+
 import numpy as np
-import tensorflow as tf
+import matplotlib.pyplot as plt
+import seaborn as sns
 from tensorflow.keras import Model as KModel
 from tensorflow.keras.applications import resnet as res, mobilenet_v2 as mob
 from tensorflow.keras.layers import Input, Conv2D, Dense, Dropout, BatchNormalization, MaxPooling2D, GlobalAveragePooling2D
 from tensorflow.keras.optimizers import SGD, Adam, RMSprop, Adagrad, Adadelta, Adamax, Nadam, Ftrl
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
+from tensorflow.keras.callbacks import History
+from sklearn.metrics import  confusion_matrix
+
 from configs import ModelConfig
+
 
 class Model:
     """
-    TODO
+    Represents the operation of the model, with methods for building, training, evaluating, and visualizing.
+    Supports architectures like ResNet50 and MobileNetV2, offers configurable layers, optimizers, and training settings.
     """
     def __init__(self, config: ModelConfig):
         self.config    = config
@@ -35,20 +40,23 @@ class Model:
 
     def build(self):
         """
-        TODO
+        Builds the model based on the provided configuration.
+
+        :return: the compiled keras model.
         """
-        if self.config.type == "resnet50": base = res.ResNet50   (input_shape=self.config.input_shape,
-                                                                  weights    =self.config.weights,
-                                                                  include_top=False)
+        if self.config.type == "resnet50": self.base = res.ResNet50   (input_shape=self.config.input_shape,
+                                                                       weights    =self.config.weights,
+                                                                       include_top=False)
 
-        else                             : base = mob.MobileNetV2(input_shape=self.config.input_shape,
-                                                                  weights    =self.config.weights,
-                                                                  include_top=False)
+        else                             : self.base = mob.MobileNetV2(input_shape=self.config.input_shape,
+                                                                       weights    =self.config.weights,
+                                                                       include_top=False)
 
-        base.trainable = False
+        self.base.trainable = False
 
-        inputs         = Input(shape=self.config.input_shape, batch_size=self.config.batch_size)
-        outputs        = base(inputs, training=False)
+        inputs              = Input(shape=self.config.input_shape, batch_size=self.config.batch_size)
+
+        outputs             = self.base(inputs, training=False)
 
         for index in range(self.config.convolutional_layers):
             outputs = Conv2D(filters    =self.config.convolutional_filters[index],
@@ -57,30 +65,32 @@ class Model:
                              padding    =self.config.padding)(outputs)
 
             if self.norm   : outputs = BatchNormalization()(outputs)
+
             if self.dropout: outputs = Dropout(rate=self.config.dropout_rates[index])(outputs)
 
             outputs = MaxPooling2D(pool_size=self.config.pooling_kernels[index])(outputs)
 
 
-        dropout        = self.config.dropout_layers      == self.config.hidden_layers
-        norm           = self.config.batch_normalization == self.config.hidden_layers
+        dropout             = self.config.dropout_layers      == self.config.hidden_layers
+
+        norm                = self.config.batch_normalization == self.config.hidden_layers
 
         if self.config.global_average_pooling: outputs = GlobalAveragePooling2D()(outputs)
 
         for index in range(self.config.hidden_layers):
-            outputs = Dense(units     =self.config.hidden_neurons[index],
-                            activation=self.config.hidden_activations[index])(outputs)
+            outputs = Dense(units=self.config.hidden_neurons[index], activation=self.config.hidden_activations[index])(outputs)
 
             if norm   : outputs = BatchNormalization()(outputs)
+
             if dropout: outputs = Dropout(rate=self.config.dropout_rates[index])(outputs)
 
-        outputs        = Dense(units=len(self.config.classes), activation=self.config.output_activation)(outputs)
+        outputs             = Dense(units=len(self.config.classes), activation=self.config.output_activation)(outputs)
 
-        self.model     = KModel(inputs=inputs, outputs=outputs)
+        self.model          = KModel(inputs=inputs, outputs=outputs)
 
         if self.config.info:
             print(f"Total layers in model: {len(self.model.layers)}")
-            print(f"Base model trainable : {base.trainable}")
+            print(f"Base model trainable : {self.base.trainable}")
             print(f"Trainable weights    : {len(self.model.trainable_weights)}")
             print(f"Non-trainable weights: {len(self.model.non_trainable_weights)}")
 
@@ -89,37 +99,116 @@ class Model:
 
     def summary(self):
         """
-        TODO
+        Prints the summary of the model architecture.
         """
         self.model.summary()
 
 
     def compile(self):
         """
-        TODO
+        Compiles the model with the specified optimizer, loss function, and metrics.
         """
         optimizer = self.optimizer(learning_rate=self.config.lr, momentum=self.config.momentum)
 
         self.model.compile(optimizer=optimizer, loss=self.config.loss, metrics=self.config.metrics)
 
 
-    def train(self, splits):
+    def train(self, splits: tuple):
         """
-        TODO
-        """
-        (train_images, train_labels), (valid_images, valid_labels), _ = splits
+        Trains the model on the provided dataset splits.
 
-        return self.model.fit(x              =train_images,
-                              y              =train_labels,
+        :param splits: two splits; one for training and one for validation sets
+        :return: the training history.
+        """
+        x, y            = splits[0]
+        validation_data = splits[1]
+
+        return self.model.fit(x              =x,
+                              y              =y,
                               epochs         =self.config.epochs[0],
                               batch_size     =self.config.batch_size,
-                              validation_data=(valid_images, valid_labels),
+                              validation_data=validation_data,
                               callbacks      =self.config.callbacks)
 
 
-    def evaluate(self, splits):
+    def __get_block_number(self, layer: str):
         """
-        TODO
+        Extracts the block number from the layer name for finetuning.
+
+        :param layer: the layer name.
+        :return: the block number.
+        """
+        if self.config.type == "resnet50":
+            match = re.search(r"block(\d+)", layer)
+            return int(match.group(1)) if match else None
+
+        else:
+            match = re.search(r"block_(\d+)", layer)
+            return int(match.group(1)) if match else None
+
+
+    def finetune(self, splits: tuple):
+        """
+        Performs finetuning on specific layers or blocks based on the configuration.
+
+        :param splits: two splits; one for training and one for validation sets.
+        :return: the training history.
+        """
+        if self.config.by == "blocks":
+            self.model.trainable = False
+
+            base = self.base
+
+            block_layers = {}
+
+            for layer in base.layers:
+                block = self.__get_block_number(layer=layer.name)
+
+                if block is not None: block_layers.setdefault(block, []).append(layer)
+
+            sorted_blocks = sorted(block_layers.keys(), reverse=True)
+
+            for block in sorted_blocks[:self.config.blocks]:
+
+                for layer in block_layers[block]: layer.trainable = True
+
+            for layer in self.model.layers[self.config.top:]: layer.trainable = True
+
+            trainable = [layer.name for layer in self.model.layers if layer.trainable] + [layer.name for layer in self.base.layers if layer.trainable]
+
+            if self.config.info:
+                print(f"Trainable layers      : {trainable}")
+                print(f"Total trainable layers: {len(trainable)}")
+
+            self.compile()
+
+            return self.train(splits)
+
+        else:
+            base_layers = [layer for layer in self.model.layers if layer.name.startswith("block")]
+
+            if self.config.layers < len(base_layers):
+                for layer in base_layers[self.config.layers:]: layer.trainable = True
+
+            for layer in self.model.layers[-self.config.top:]: layer.trainable = True
+
+            trainable = [layer.name for layer in self.model.layers if layer.trainable]
+
+            if self.config.info:
+                print(f"Trainable layers      : {trainable}")
+                print(f"Total trainable layers: {len(trainable)}")
+
+            self.compile()
+
+            return self.train(splits)
+
+
+    def evaluate(self, splits: tuple):
+        """
+        Evaluates the model on the provided dataset.
+
+        :param splits: the evaluation or testing sets.
+        :return: the evaluation or testing metrics.
         """
         x, y      = splits
 
@@ -161,17 +250,23 @@ class Model:
         return metrics
 
 
-    def predict(self, inputs):
+    def predict(self, inputs: np.ndarray):
         """
-        TODO
+        Predicts the labels for the given input data.
+
+        :param inputs: the input images.
+        :return: the predicted labels.
         """
         return self.model.predict(inputs)
 
 
     @staticmethod
-    def visualize_performance(history, metric):
+    def visualize_performance(history: History, metric: str):
         """
-        TODO
+        Visualizes the performance of the model over epochs for a specific metric.
+
+        :param history: the training history.
+        :param metric: the metric to visualize.
         """
         if metric == "f1_score":
             train_f1 = [np.mean(values) for values in history.history[metric]]
@@ -196,9 +291,11 @@ class Model:
         plt.show()
 
 
-    def visualize_misclassifications(self, splits):
+    def visualize_misclassifications(self, splits: tuple):
         """
-        TODO
+        Visualizes misclassified samples in a 3x3 grid.
+
+        :param splits: the evaluation or testing sets.
         """
         x, y             = splits
 
@@ -222,9 +319,11 @@ class Model:
         plt.show()
 
 
-    def visualize_confusion_matrix(self, splits):
+    def visualize_confusion_matrix(self, splits: tuple):
         """
-        TODO
+        Visualizes the confusion matrix for model predictions.
+
+        :param splits: the evaluation or testing sets.
         """
         x, y        = splits
 
@@ -241,56 +340,3 @@ class Model:
         plt.title ("Confusion Matrix")
         plt.tight_layout()
         plt.show()
-
-# TODO
-from PIL import Image
-import tensorflow_datasets as tfds
-
-def to_numpy(dataset, img_size):
-    images, labels = [], []
-
-    for img, label in dataset:
-        img = img.numpy()
-        img = np.array(Image.fromarray(img).resize(img_size))
-        images.append(img)
-        labels.append(label.numpy())
-
-    labels = tf.keras.utils.to_categorical(np.array(labels)) # TODO
-
-    return np.array(images), np.array(labels)
-
-def load_and_prepare(img_size=(224, 224)):
-    splits = ["train[:10%]", "train[10%:25%]", "train[25%:]"]
-
-    (test_set_raw, valid_set_raw, train_set_raw), info = tfds.load("tf_flowers", split=splits, as_supervised=True, with_info=True)
-
-    train_images, train_labels = to_numpy(train_set_raw, img_size)
-    valid_images, valid_labels = to_numpy(valid_set_raw, img_size)
-    test_images , test_labels  = to_numpy(test_set_raw , img_size)
-
-    train_images = mob.preprocess_input(train_images)
-    valid_images = mob.preprocess_input(valid_images)
-    test_images  = mob.preprocess_input(test_images)
-
-    class_names = info.features["label"].names
-
-    return (train_images, train_labels), (valid_images, valid_labels), (test_images, test_labels), class_names
-
-# TODO
-np.random.seed(42)
-tf.random.set_seed(42)
-
-# (train_images, train_labels), (valid_images, valid_labels), (test_images, test_labels), classes = load_and_prepare()
-#
-# splits = (train_images, train_labels), (valid_images, valid_labels), (test_images, test_labels)
-#
-# config = ModelConfig(type="mobilenet", by="blocks", classes=classes)
-# model  = Model(config=config)
-#
-# model.build()
-# model.compile()
-# history = model.train(splits=splits)
-# metrics  = model.evaluate(splits=splits[-1])
-# model.visualize_misclassifications(splits=splits[-1])
-# model.visualize_confusion_matrix(splits=splits[-1])
-# model.visualize_performance(history=history, metric="f1_score")
