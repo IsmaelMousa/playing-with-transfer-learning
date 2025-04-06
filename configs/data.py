@@ -14,11 +14,11 @@ class DataConfig:
         - data_name: The name of the dataset to be loaded.
         - preprocess: The name of the preprocessing model to apply.
     """
-    img_size:tuple
-    validation_ratio:float
-    test_ratio:float
-    data_name:str
-    preprocess:str
+    img_size:tuple = (224,224)
+    validation_ratio:float = 0.1
+    test_ratio:float = 0.15
+    data_name:str = "tf_flowers"
+    preprocess:str = "resnet50"
 
     def __post_init__(self):
         """
