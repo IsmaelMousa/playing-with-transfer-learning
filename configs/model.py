@@ -34,7 +34,7 @@ class ModelConfig:
     - hidden_activations: the activation functions for each hidden layer.
     - dropout_rates: the dropout rates for each layer.
     - metrics: the evaluation metrics (e.g., accuracy, recall, precision, f1_score).
-    - epochs: the number of training epochs.
+    - epochs: the number of training epochs, the first is for training phase, the second is for finetuning phase.
     - input_shape: the input shape of the data (e.g., (224, 224, 3) for images).
     - callbacks: the callback functions for model training.
     - loss: the loss function to be used during training (e.g., 'categorical_crossentropy').
@@ -68,7 +68,7 @@ class ModelConfig:
     hidden_activations       : list        = field(default_factory=lambda: [])
     dropout_rates            : list        = field(default_factory=lambda: [0.2])
     metrics                  : list        = field(default_factory=lambda: ["accuracy", "recall", "precision", "f1_score"])
-    epochs                   : list        = field(default_factory=lambda: [5, 5])
+    epochs                   : list        = field(default_factory=lambda: [3, 5])
     input_shape              : tuple       = field(default_factory=lambda:(224, 224, 3))
     callbacks                : list | None = None
     loss                     : str         = "categorical_crossentropy"
