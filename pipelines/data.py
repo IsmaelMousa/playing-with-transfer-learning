@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 import tensorflow.keras.applications.resnet50 as resnet
 import tensorflow.keras.applications.mobilenet as mobilenet
-from configs.data import DataConfig
+from configs import DataConfig
 from tensorflow.keras.utils import to_categorical
 
 
