@@ -154,6 +154,8 @@ class Model:
         :param splits: two splits; one for training and one for validation sets.
         :return: the training history.
         """
+        self.config.epochs[0] = self.config.epochs[1]
+
         if self.config.by == "blocks":
             self.model.trainable = False
 
