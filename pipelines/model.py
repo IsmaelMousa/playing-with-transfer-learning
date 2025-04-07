@@ -278,11 +278,11 @@ class Model:
             plt.plot(valid_f1, label="Validation f1_score", color="red",linestyle="--", linewidth=2)
 
         else:
-            train_f1 = history.history[metric]
-            valid_f1 = history.history[f"val_{metric}"]
+            train_metric = history.history[metric]
+            valid_metric = history.history[f"val_{metric}"]
 
-            plt.plot(train_f1, label=f"Training {metric} ", color="green", linestyle="-", linewidth=2)
-            plt.plot(valid_f1, label=f"Validation {metric}", color="red", linestyle="--", linewidth=2)
+            plt.plot(train_metric, label=f"Training {metric} ", color="green", linestyle="-", linewidth=2)
+            plt.plot(valid_metric, label=f"Validation {metric}", color="red", linestyle="--", linewidth=2)
 
         plt.xlabel("Epochs")
         plt.ylabel(metric.capitalize())
