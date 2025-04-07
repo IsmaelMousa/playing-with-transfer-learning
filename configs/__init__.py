@@ -1,1 +1,3 @@
-# TODO: remove this once you start.
+from .model import ModelConfig
+
+__all__ = ["ModelConfig"]
